@@ -1,7 +1,7 @@
 import Dependencies.*
 
 lazy val commonSettings = Seq(
-  organization := "aio.ce.cache",
+  organization := "kots.cache",
   version := "0.1.0-SNAPSHOT",
   scalaVersion := scala213,
   crossScalaVersions := Seq(scala213, scala3),

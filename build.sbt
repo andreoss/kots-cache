@@ -8,6 +8,8 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= common,
   Compile / compile / scalacOptions ++= ScalacOptions.forVersion(scalaVersion.value),
   Test / publishArtifact := false,
+  coverageMinimumStmtTotal := 85,
+  coverageFailOnMinimum := true,
 )
 
 lazy val root = (project in file("."))

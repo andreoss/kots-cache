@@ -26,7 +26,7 @@ lazy val mem = project
   .in(file("modules/mem"))
   .settings(commonSettings)
   .settings(name := "kots-cache-mem")
-  .dependsOn(core)
+  .dependsOn(core % "compile->compile;test->test")
 
 lazy val jcache = project
   .in(file("modules/jcache"))

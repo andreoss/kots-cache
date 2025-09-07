@@ -41,6 +41,33 @@ abstract class CacheContract extends CatsEffectSuite {
       .assertEquals((None, Some(2)))
   }
 
+  test("modify inserts when the key is absent and returns the old value") {
+    cache
+      .flatMap(c => c.modify("a")(o => (Some(1), o)).product(c.get("a")))
+      .assertEquals((None, Some(1)))
+  }
+
+  test("modify transforms the present value") {
+    cache
+      .flatMap(c => c.put("a", 1) *> c.modify("a")(o => (o.map(_ + 1), o)).product(c.get("a")))
+      .assertEquals((Some(1), Some(2)))
+  }
+
+  test("modify to None removes the key") {
+    cache
+      .flatMap(c => c.put("a", 1) *> c.modify("a")(_ => (None, ())) *> c.get("a"))
+      .assertEquals(None)
+  }
+
+  test("concurrent modifies never lose an update") {
+    cache
+      .flatMap { c =>
+        List.fill(100)(c.modify("n")(o => (Some(o.getOrElse(0) + 1), ()))).parSequence_ *>
+          c.get("n")
+      }
+      .assertEquals(Some(100))
+  }
+
   test("concurrent puts of distinct keys all land") {
     cache
       .flatMap { c =>

@@ -9,13 +9,14 @@ import scala.concurrent.duration.FiniteDuration
 
 object MemCache {
 
-  private final case class Entry[V](value: V, writeAt: FiniteDuration)
+  private final case class Entry[V](value: V, writeAt: FiniteDuration, touchAt: FiniteDuration)
 
   /** Builds an in-memory cache whose entries follow the expiry policy. */
   def expiring[F[_]: Monad: Clock: Ref.Make, K, V](expiry: Expiry): F[Cache[F, K, V]] =
     Ref.of[F, Map[K, Entry[V]]](Map.empty).map { ref =>
       def dead(e: Entry[V], now: FiniteDuration): Boolean =
-        expiry.timeToLive.exists(ttl => now - e.writeAt >= ttl)
+        expiry.timeToLive.exists(ttl => now - e.writeAt >= ttl) ||
+          expiry.timeToIdle.exists(tti => now - e.touchAt >= tti)
 
       new Cache[F, K, V] {
         def get(key: K): F[Option[V]] =
@@ -23,20 +24,21 @@ object MemCache {
             ref.modify { m =>
               m.get(key) match {
                 case Some(e) if dead(e, now) => (m - key, None)
-                case live                    => (m, live.map(_.value))
+                case Some(e)                 => (m.updated(key, e.copy(touchAt = now)), Some(e.value))
+                case None                    => (m, None)
               }
             }
           }
 
         def put(key: K, value: V): F[Unit] =
-          Clock[F].monotonic.flatMap(now => ref.update(_.updated(key, Entry(value, now))))
+          Clock[F].monotonic.flatMap(now => ref.update(_.updated(key, Entry(value, now, now))))
 
         def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
           Clock[F].monotonic.flatMap { now =>
             ref.modify { m =>
               val live = m.get(key).filterNot(dead(_, now))
               val (next, a) = f(live.map(_.value))
-              (next.fold(m - key)(v => m.updated(key, Entry(v, now))), a)
+              (next.fold(m - key)(v => m.updated(key, Entry(v, now, now))), a)
             }
           }
 

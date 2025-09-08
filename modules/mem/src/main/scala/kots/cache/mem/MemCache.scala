@@ -11,6 +11,48 @@ object MemCache {
 
   private final case class Entry[V](value: V, writeAt: FiniteDuration, touchAt: FiniteDuration)
 
+  private final case class Stamped[V](value: V, stamp: Long)
+  private final case class Recency[K, V](entries: Map[K, Stamped[V]], tick: Long)
+
+  /** Builds an in-memory cache evicting the least recently used entry. */
+  def bounded[F[_]: Functor: Ref.Make, K, V](maximum: Int): F[Cache[F, K, V]] =
+    Ref.of[F, Recency[K, V]](Recency(Map.empty, 0L)).map { ref =>
+      def within(entries: Map[K, Stamped[V]]): Map[K, Stamped[V]] =
+        if (entries.size <= maximum) entries
+        else entries - entries.minBy(_._2.stamp)._1
+
+      new Cache[F, K, V] {
+        def get(key: K): F[Option[V]] =
+          ref.modify { s =>
+            s.entries.get(key) match {
+              case Some(e) =>
+                (Recency(s.entries.updated(key, e.copy(stamp = s.tick)), s.tick + 1), Some(e.value))
+              case None => (s, None)
+            }
+          }
+
+        def put(key: K, value: V): F[Unit] =
+          ref.update { s =>
+            Recency(within(s.entries.updated(key, Stamped(value, s.tick))), s.tick + 1)
+          }
+
+        def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
+          ref.modify { s =>
+            val (next, a) = f(s.entries.get(key).map(_.value))
+            val entries = next match {
+              case Some(v) => within(s.entries.updated(key, Stamped(v, s.tick)))
+              case None    => s.entries - key
+            }
+            (Recency(entries, s.tick + 1), a)
+          }
+
+        def remove(key: K): F[Unit] =
+          ref.update(s => s.copy(entries = s.entries - key))
+
+        def clear: F[Unit] = ref.update(_.copy(entries = Map.empty))
+      }
+    }
+
   /** Builds an in-memory cache whose entries follow the expiry policy. */
   def expiring[F[_]: Monad: Clock: Ref.Make, K, V](expiry: Expiry): F[Cache[F, K, V]] =
     Ref.of[F, Map[K, Entry[V]]](Map.empty).map { ref =>

@@ -1,8 +1,9 @@
 package kots.cache.mem
 
 import cats.effect.IO
+import cats.effect.kernel.Ref
 import cats.syntax.all._
-import kots.cache.{Cache, CacheContract}
+import kots.cache.{Cache, CacheContract, CacheMetrics}
 import munit.CatsEffectSuite
 
 final class MemBoundedContractSuite extends CacheContract {
@@ -37,6 +38,20 @@ final class MemBoundedSuite extends CatsEffectSuite {
       (1 to 100).toList.parTraverse_(i => c.put(i.toString, i)) *>
         (1 to 100).toList.traverse(i => c.get(i.toString)).map(_.flatten.size)
     }.assertEquals(10)
+  }
+
+  test("each eviction is reported to the metrics port") {
+    Ref.of[IO, Int](0).flatMap { evictions =>
+      val metrics = new CacheMetrics[IO] {
+        def hit: IO[Unit] = IO.unit
+        def miss: IO[Unit] = IO.unit
+        def load: IO[Unit] = IO.unit
+        def eviction: IO[Unit] = evictions.update(_ + 1)
+      }
+      MemCache.bounded[IO, String, Int](2, metrics).flatMap { c =>
+        c.put("a", 1) *> c.put("b", 2) *> c.put("c", 3) *> c.put("a", 4) *> evictions.get
+      }
+    }.assertEquals(2)
   }
 
   test("overwriting a present key does not evict") {

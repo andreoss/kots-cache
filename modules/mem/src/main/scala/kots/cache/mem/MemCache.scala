@@ -3,7 +3,7 @@ package kots.cache.mem
 import cats.{Functor, Monad}
 import cats.effect.kernel.{Clock, Ref}
 import cats.syntax.all._
-import kots.cache.{Cache, Expiry}
+import kots.cache.{Cache, CacheMetrics, Expiry}
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -15,11 +15,18 @@ object MemCache {
   private final case class Recency[K, V](entries: Map[K, Stamped[V]], tick: Long)
 
   /** Builds an in-memory cache evicting the least recently used entry. */
-  def bounded[F[_]: Functor: Ref.Make, K, V](maximum: Int): F[Cache[F, K, V]] =
+  def bounded[F[_]: Monad: Ref.Make, K, V](maximum: Int): F[Cache[F, K, V]] =
+    bounded(maximum, CacheMetrics.noop[F])
+
+  /** Bounded cache reporting each eviction to the metrics port. */
+  def bounded[F[_]: Monad: Ref.Make, K, V](
+    maximum: Int,
+    metrics: CacheMetrics[F],
+  ): F[Cache[F, K, V]] =
     Ref.of[F, Recency[K, V]](Recency(Map.empty, 0L)).map { ref =>
-      def within(entries: Map[K, Stamped[V]]): Map[K, Stamped[V]] =
-        if (entries.size <= maximum) entries
-        else entries - entries.minBy(_._2.stamp)._1
+      def within(entries: Map[K, Stamped[V]]): (Map[K, Stamped[V]], Boolean) =
+        if (entries.size <= maximum) (entries, false)
+        else (entries - entries.minBy(_._2.stamp)._1, true)
 
       new Cache[F, K, V] {
         def get(key: K): F[Option[V]] =
@@ -32,19 +39,20 @@ object MemCache {
           }
 
         def put(key: K, value: V): F[Unit] =
-          ref.update { s =>
-            Recency(within(s.entries.updated(key, Stamped(value, s.tick))), s.tick + 1)
-          }
+          ref.modify { s =>
+            val (entries, evicted) = within(s.entries.updated(key, Stamped(value, s.tick)))
+            (Recency(entries, s.tick + 1), evicted)
+          }.flatMap(metrics.eviction.whenA(_))
 
         def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
           ref.modify { s =>
             val (next, a) = f(s.entries.get(key).map(_.value))
-            val entries = next match {
+            val (entries, evicted) = next match {
               case Some(v) => within(s.entries.updated(key, Stamped(v, s.tick)))
-              case None    => s.entries - key
+              case None    => (s.entries - key, false)
             }
-            (Recency(entries, s.tick + 1), a)
-          }
+            (Recency(entries, s.tick + 1), (a, evicted))
+          }.flatMap { case (a, evicted) => metrics.eviction.whenA(evicted).as(a) }
 
         def remove(key: K): F[Unit] =
           ref.update(s => s.copy(entries = s.entries - key))

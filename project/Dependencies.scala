@@ -6,6 +6,8 @@ object Dependencies {
   val catsEffect = "org.typelevel" %% "cats-effect" % "3.7.1"
   val munitCatsEffect = "org.typelevel" %% "munit-cats-effect" % "2.1.0" % Test
   val catsEffectTestkit = "org.typelevel" %% "cats-effect-testkit" % "3.7.1" % Test
+  val jcacheApi = "javax.cache" % "cache-api" % "1.1.1"
+  val caffeineJcache = "com.github.ben-manes.caffeine" % "jcache" % "3.1.8" % Test
 
   val scala213 = "2.13.18"
   val scala3 = "3.3.8"

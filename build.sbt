@@ -39,7 +39,8 @@ lazy val redis = project
   .in(file("modules/redis"))
   .settings(commonSettings)
   .settings(name := "kots-cache-redis")
-  .dependsOn(core)
+  .settings(libraryDependencies += redis4cats)
+  .dependsOn(core % "compile->compile;test->test")
 
 lazy val interop = project
   .in(file("modules/interop"))

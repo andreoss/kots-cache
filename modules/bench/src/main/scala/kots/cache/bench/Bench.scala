@@ -20,6 +20,10 @@ object Bench {
       end <- Clock[IO].monotonic
     } yield Report(label, ops, end - start)
 
+  /** Runs the comparison and prints one line per contender. */
+  def report(ops: Int): IO[Unit] =
+    run(ops).flatMap(_.traverse_(r => IO.println(r.show)))
+
   /** Times mixed put/get rounds on the mem adapter and a bare ref map. */
   def run(ops: Int): IO[List[Report]] =
     for {
@@ -36,6 +40,5 @@ object Bench {
 }
 
 object Main extends IOApp.Simple {
-  def run: IO[Unit] =
-    Bench.run(100000).flatMap(_.traverse_(r => IO.println(r.show)))
+  def run: IO[Unit] = Bench.report(100000)
 }

@@ -11,6 +11,10 @@ final class BenchSuite extends CatsEffectSuite {
     }
   }
 
+  test("reporting prints and completes") {
+    Bench.report(100).assertEquals(())
+  }
+
   test("a report renders without key or value contents") {
     Bench.run(100).map { reports =>
       reports.foreach(r => assert(r.show.startsWith(r.label)))

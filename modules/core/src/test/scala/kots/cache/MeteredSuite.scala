@@ -63,6 +63,31 @@ final class MeteredSuite extends CatsEffectSuite {
     }.assertEquals(0)
   }
 
+  test("the metered cache passes writes through") {
+    (stub, probe).flatMapN { (c0, p) =>
+      val c = Metered.cache(c0, p)
+      c.put("a", 1) *> c.modify("a")(o => (o.map(_ + 1), ())) *> c.get("a").flatMap { v =>
+        c.remove("a") *> c.clear *> c.get("a").map(after => (v, after))
+      }
+    }.assertEquals((Some(2), None))
+  }
+
+  test("the metered loading cache passes writes through") {
+    (stub, probe).flatMapN { (c0, p) =>
+      LoadingCache.singleFlight(c0).flatMap { lc =>
+        val c = Metered.loading(lc, p)
+        c.put("a", 1) *> c.modify("a")(o => (o.map(_ + 1), ())) *> c.get("a").flatMap { v =>
+          c.remove("a") *> c.put("b", 2) *> c.clear *> c.get("b").map(after => (v, after))
+        }
+      }
+    }.assertEquals((Some(2), None))
+  }
+
+  test("every no-op metric runs") {
+    val m = CacheMetrics.noop[IO]
+    (m.hit *> m.miss *> m.load *> m.eviction).assertEquals(())
+  }
+
   test("the no-op metrics change nothing") {
     stub.flatMap { c0 =>
       val c = Metered.cache(c0, CacheMetrics.noop[IO])

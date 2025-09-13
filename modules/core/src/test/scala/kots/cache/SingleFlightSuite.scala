@@ -52,6 +52,14 @@ final class SingleFlightSuite extends CatsEffectSuite {
       .assertEquals(Some(5))
   }
 
+  test("the loading cache delegates the base algebra") {
+    loading.flatMap { case (c, _) =>
+      c.put("a", 1) *> c.modify("a")(o => (o.map(_ + 1), ())) *> c.get("a").flatMap { v =>
+        c.remove("a") *> c.put("b", 2) *> c.clear *> c.get("b").map(after => (v, after))
+      }
+    }.assertEquals((Some(2), None))
+  }
+
   test("a failed load reaches every waiter and caches nothing") {
     loading.flatMap { case (c, _) =>
       val boom = IO.raiseError[Int](new IllegalStateException("load failed"))

@@ -46,7 +46,8 @@ lazy val interop = project
   .in(file("modules/interop"))
   .settings(commonSettings)
   .settings(name := "kots-cache-interop")
-  .dependsOn(core)
+  .settings(libraryDependencies ++= Seq(zio, zioInteropCats))
+  .dependsOn(core % "compile->compile;test->test", mem % "test->compile")
 
 lazy val bench = project
   .in(file("modules/bench"))

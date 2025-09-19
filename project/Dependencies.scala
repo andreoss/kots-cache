@@ -8,6 +8,7 @@ object Dependencies {
   val catsEffectTestkit = "org.typelevel" %% "cats-effect-testkit" % "3.7.1" % Test
   val jcacheApi = "javax.cache" % "cache-api" % "1.1.1"
   val caffeineJcache = "com.github.ben-manes.caffeine" % "jcache" % "3.1.8" % Test
+  val caffeine = "com.github.ben-manes.caffeine" % "caffeine" % "3.1.8"
   val redis4cats = "dev.profunktor" %% "redis4cats-effects" % "2.0.6"
   val zio = "dev.zio" %% "zio" % "2.1.26" % Test
   val zioInteropCats = "dev.zio" %% "zio-interop-cats" % "23.1.0.13" % Test

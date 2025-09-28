@@ -15,7 +15,7 @@ lazy val commonSettings = Seq(
 lazy val root = (project in file("."))
   .settings(commonSettings)
   .settings(name := "kots-cache", publish / skip := true)
-  .aggregate(core, mem, jcache, redis, interop, bench, caffeine)
+  .aggregate(core, mem, jcache, redis, interop, bench, caffeine, hazelcast)
 
 lazy val core = project
   .in(file("modules/core"))
@@ -54,6 +54,14 @@ lazy val caffeine = project
   .settings(commonSettings)
   .settings(name := "kots-cache-caffeine")
   .settings(libraryDependencies += Dependencies.caffeine)
+  .dependsOn(core % "compile->compile;test->test")
+
+lazy val hazelcast = project
+  .in(file("modules/hazelcast"))
+  .settings(commonSettings)
+  .settings(name := "kots-cache-hazelcast")
+  .settings(libraryDependencies += Dependencies.hazelcast)
+  .settings(Test / fork := true)
   .dependsOn(core % "compile->compile;test->test")
 
 lazy val bench = project

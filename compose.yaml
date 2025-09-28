@@ -8,3 +8,7 @@ services:
       interval: 2s
       timeout: 2s
       retries: 15
+  hazelcast:
+    image: docker.io/hazelcast/hazelcast:5.5
+    ports:
+      - "5701:5701"

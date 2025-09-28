@@ -14,9 +14,11 @@ Unit and embedded-provider tiers need no services.
 Backend services come from the compose stack:
 
     docker compose up -d --wait
+    ./scripts/couchbase-init.sh
 
-The suites in `modules/redis` (and other composed backends) run against it:
+The suites in `modules/redis`, `modules/hazelcast` and `modules/couchbase`
+run against the stack:
 
-    sbt -batch +redis/test
+    sbt -batch +redis/test +hazelcast/test +couchbase/test
 
 Tear down with `docker compose down`.

@@ -12,3 +12,8 @@ services:
     image: docker.io/hazelcast/hazelcast:5.5
     ports:
       - "5701:5701"
+  couchbase:
+    image: docker.io/couchbase/server:community-7.6.2
+    ports:
+      - "8091-8096:8091-8096"
+      - "11210:11210"

@@ -11,6 +11,7 @@ object Dependencies {
   val caffeine = "com.github.ben-manes.caffeine" % "caffeine" % "3.1.8"
   val ehcache = "org.ehcache" % "ehcache" % "3.10.8" % Test
   val infinispanJcache = "org.infinispan" % "infinispan-jcache" % "15.2.6.Final" % Test
+  val cache2kJcache = "org.cache2k" % "cache2k-jcache" % "2.6.1.Final" % Test
   val hazelcast = "com.hazelcast" % "hazelcast" % "5.5.0"
   val couchbase = "com.couchbase.client" % "java-client" % "3.12.3"
   val redis4cats = "dev.profunktor" %% "redis4cats-effects" % "2.0.6"

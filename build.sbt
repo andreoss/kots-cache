@@ -32,7 +32,9 @@ lazy val jcache = project
   .in(file("modules/jcache"))
   .settings(commonSettings)
   .settings(name := "kots-cache-jcache")
-  .settings(libraryDependencies ++= Seq(jcacheApi, caffeineJcache, ehcache, infinispanJcache))
+  .settings(
+    libraryDependencies ++= Seq(jcacheApi, caffeineJcache, ehcache, infinispanJcache, cache2kJcache),
+  )
   .dependsOn(core % "compile->compile;test->test")
 
 lazy val redis = project

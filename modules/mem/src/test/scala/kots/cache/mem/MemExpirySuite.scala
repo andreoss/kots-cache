@@ -42,6 +42,25 @@ final class MemExpirySuite extends CatsEffectSuite {
     }.assertEquals(None)
   }
 
+  test("an expiry death reports the entry lifetime") {
+    TestControl.executeEmbed {
+      cats.effect.kernel.Ref.of[IO, List[FiniteDuration]](Nil).flatMap { ages =>
+        val metrics = new kots.cache.CacheMetrics[IO] {
+          def hit: IO[Unit] = IO.unit
+          def miss: IO[Unit] = IO.unit
+          def load: IO[Unit] = IO.unit
+          def eviction: IO[Unit] = IO.unit
+          def getLatency(duration: FiniteDuration): IO[Unit] = IO.unit
+          def loadLatency(duration: FiniteDuration, success: Boolean): IO[Unit] = IO.unit
+          def entryLifetime(age: FiniteDuration): IO[Unit] = ages.update(age :: _)
+        }
+        MemCache.expiring[IO, String, Int](Expiry.ttl(1.minute), metrics).flatMap { c =>
+          c.put("a", 1) *> IO.sleep(90.seconds) *> c.get("a") *> ages.get
+        }
+      }
+    }.assertEquals(List(90.seconds))
+  }
+
   test("no expiry keeps entries forever") {
     TestControl.executeEmbed {
       MemCache

@@ -63,21 +63,33 @@ object MemCache {
 
   /** Builds an in-memory cache whose entries follow the expiry policy. */
   def expiring[F[_]: Monad: Clock: Ref.Make, K, V](expiry: Expiry): F[Cache[F, K, V]] =
+    expiring(expiry, CacheMetrics.noop[F])
+
+  /** Expiring cache reporting each entry's lifetime at its expiry death. */
+  def expiring[F[_]: Monad: Clock: Ref.Make, K, V](
+    expiry: Expiry,
+    metrics: CacheMetrics[F],
+  ): F[Cache[F, K, V]] =
     Ref.of[F, Map[K, Entry[V]]](Map.empty).map { ref =>
       def dead(e: Entry[V], now: FiniteDuration): Boolean =
         expiry.timeToLive.exists(ttl => now - e.writeAt >= ttl) ||
           expiry.timeToIdle.exists(tti => now - e.touchAt >= tti)
+
+      def died(age: Option[FiniteDuration]): F[Unit] =
+        age.traverse_(metrics.entryLifetime)
 
       new Cache[F, K, V] {
         def get(key: K): F[Option[V]] =
           Clock[F].monotonic.flatMap { now =>
             ref.modify { m =>
               m.get(key) match {
-                case Some(e) if dead(e, now) => (m - key, None)
-                case Some(e)                 => (m.updated(key, e.copy(touchAt = now)), Some(e.value))
-                case None                    => (m, None)
+                case Some(e) if dead(e, now) =>
+                  ((m - key, (Option.empty[V], Some(now - e.writeAt))))
+                case Some(e) =>
+                  ((m.updated(key, e.copy(touchAt = now)), (Some(e.value), None)))
+                case None => ((m, (None, None)))
               }
-            }
+            }.flatMap { case (value, age) => died(age).as(value) }
           }
 
         def put(key: K, value: V): F[Unit] =
@@ -86,10 +98,13 @@ object MemCache {
         def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
           Clock[F].monotonic.flatMap { now =>
             ref.modify { m =>
-              val live = m.get(key).filterNot(dead(_, now))
+              val found = m.get(key)
+              val expired = found.filter(dead(_, now))
+              val live = found.filterNot(dead(_, now))
               val (next, a) = f(live.map(_.value))
-              (next.fold(m - key)(v => m.updated(key, Entry(v, now, now))), a)
-            }
+              val age = expired.map(e => now - e.writeAt)
+              (next.fold(m - key)(v => m.updated(key, Entry(v, now, now))), (a, age))
+            }.flatMap { case (a, age) => died(age).as(a) }
           }
 
         def remove(key: K): F[Unit] = ref.update(_ - key)

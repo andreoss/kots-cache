@@ -2,12 +2,17 @@ package kots.cache
 
 import cats.Applicative
 
-/** Counters a cache reports to; carries no key or value contents. */
+import scala.concurrent.duration.FiniteDuration
+
+/** Counters and durations a cache reports; carries no key or value contents. */
 trait CacheMetrics[F[_]] {
   def hit: F[Unit]
   def miss: F[Unit]
   def load: F[Unit]
   def eviction: F[Unit]
+  def getLatency(duration: FiniteDuration): F[Unit]
+  def loadLatency(duration: FiniteDuration, success: Boolean): F[Unit]
+  def entryLifetime(age: FiniteDuration): F[Unit]
 }
 
 object CacheMetrics {
@@ -19,5 +24,8 @@ object CacheMetrics {
       def miss: F[Unit] = F.unit
       def load: F[Unit] = F.unit
       def eviction: F[Unit] = F.unit
+      def getLatency(duration: FiniteDuration): F[Unit] = F.unit
+      def loadLatency(duration: FiniteDuration, success: Boolean): F[Unit] = F.unit
+      def entryLifetime(age: FiniteDuration): F[Unit] = F.unit
     }
 }

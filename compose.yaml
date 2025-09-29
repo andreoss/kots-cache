@@ -12,6 +12,13 @@ services:
     image: docker.io/hazelcast/hazelcast:5.5
     ports:
       - "5701:5701"
+  infinispan:
+    image: quay.io/infinispan/server:15.2
+    environment:
+      USER: admin
+      PASS: password
+    ports:
+      - "11222:11222"
   couchbase:
     image: docker.io/couchbase/server:community-7.6.2
     ports:

@@ -15,7 +15,7 @@ lazy val commonSettings = Seq(
 lazy val root = (project in file("."))
   .settings(commonSettings)
   .settings(name := "kots-cache", publish / skip := true)
-  .aggregate(core, mem, jcache, redis, interop, bench, caffeine, hazelcast, couchbase)
+  .aggregate(core, mem, jcache, redis, interop, bench, caffeine, hazelcast, couchbase, infinispan)
 
 lazy val core = project
   .in(file("modules/core"))
@@ -71,6 +71,14 @@ lazy val couchbase = project
   .settings(commonSettings)
   .settings(name := "kots-cache-couchbase")
   .settings(libraryDependencies += Dependencies.couchbase)
+  .settings(Test / fork := true)
+  .dependsOn(core % "compile->compile;test->test")
+
+lazy val infinispan = project
+  .in(file("modules/infinispan"))
+  .settings(commonSettings)
+  .settings(name := "kots-cache-infinispan")
+  .settings(libraryDependencies += Dependencies.infinispanHotrod)
   .settings(Test / fork := true)
   .dependsOn(core % "compile->compile;test->test")
 

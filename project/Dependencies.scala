@@ -14,6 +14,7 @@ object Dependencies {
   val cache2kJcache = "org.cache2k" % "cache2k-jcache" % "2.6.1.Final" % Test
   val hazelcast = "com.hazelcast" % "hazelcast" % "5.5.0"
   val couchbase = "com.couchbase.client" % "java-client" % "3.12.3"
+  val infinispanHotrod = "org.infinispan" % "infinispan-client-hotrod" % "15.2.6.Final"
   val redis4cats = "dev.profunktor" %% "redis4cats-effects" % "2.0.6"
   val zio = "dev.zio" %% "zio" % "2.1.26" % Test
   val zioInteropCats = "dev.zio" %% "zio-interop-cats" % "23.1.0.13" % Test

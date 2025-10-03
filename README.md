@@ -21,4 +21,10 @@ and `modules/couchbase` run against the stack:
 
     sbt -batch +redis/test +hazelcast/test +infinispan/test +couchbase/test
 
+The metrics e2e suite in `modules/prometheus` exposes a workload on
+`127.0.0.1:19095` and asserts the composed Prometheus (host network,
+`scripts/prometheus.yml`) scrapes it:
+
+    sbt -batch +prometheus/test
+
 Tear down with `docker compose down`.

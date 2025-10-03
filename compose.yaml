@@ -19,6 +19,11 @@ services:
       PASS: password
     ports:
       - "11222:11222"
+  prometheus:
+    image: docker.io/prom/prometheus:v3.5.0
+    network_mode: host
+    volumes:
+      - ./scripts/prometheus.yml:/etc/prometheus/prometheus.yml:ro
   couchbase:
     image: docker.io/couchbase/server:community-7.6.2
     ports:

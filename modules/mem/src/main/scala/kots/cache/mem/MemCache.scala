@@ -84,10 +84,10 @@ object MemCache {
             ref.modify { m =>
               m.get(key) match {
                 case Some(e) if dead(e, now) =>
-                  ((m - key, (Option.empty[V], Some(now - e.writeAt))))
+                  (m - key, (Option.empty[V], Some(now - e.writeAt)))
                 case Some(e) =>
-                  ((m.updated(key, e.copy(touchAt = now)), (Some(e.value), None)))
-                case None => ((m, (None, None)))
+                  (m.updated(key, e.copy(touchAt = now)), (Some(e.value), None))
+                case None => (m, (None, None))
               }
             }.flatMap { case (value, age) => died(age).as(value) }
           }
@@ -98,11 +98,11 @@ object MemCache {
         def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
           Clock[F].monotonic.flatMap { now =>
             ref.modify { m =>
-              val found = m.get(key)
-              val expired = found.filter(dead(_, now))
-              val live = found.filterNot(dead(_, now))
+              val (live, age) = m.get(key) match {
+                case Some(e) if dead(e, now) => (None, Some(now - e.writeAt))
+                case found                   => (found, None)
+              }
               val (next, a) = f(live.map(_.value))
-              val age = expired.map(e => now - e.writeAt)
               (next.fold(m - key)(v => m.updated(key, Entry(v, now, now))), (a, age))
             }.flatMap { case (a, age) => died(age).as(a) }
           }

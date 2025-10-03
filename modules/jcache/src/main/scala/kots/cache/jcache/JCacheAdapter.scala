@@ -1,6 +1,7 @@
 package kots.cache.jcache
 
 import cats.effect.kernel.Sync
+import cats.syntax.all._
 import javax.cache.{Cache => JCache}
 import javax.cache.processor.{EntryProcessor, MutableEntry}
 import kots.cache.Cache
@@ -32,7 +33,7 @@ object JCacheAdapter {
           )
         }
 
-      def remove(key: K): F[Unit] = F.delay { underlying.remove(key); () }
+      def remove(key: K): F[Unit] = F.delay(underlying.remove(key)).void
 
       def clear: F[Unit] = F.delay(underlying.clear())
     }

@@ -15,6 +15,9 @@ object Dependencies {
   val hazelcast = "com.hazelcast" % "hazelcast" % "5.5.0"
   val couchbase = "com.couchbase.client" % "java-client" % "3.12.3"
   val infinispanHotrod = "org.infinispan" % "infinispan-client-hotrod" % "15.2.6.Final"
+  val prometheusCore = "io.prometheus" % "prometheus-metrics-core" % "1.8.0"
+  val prometheusHttpServer =
+    "io.prometheus" % "prometheus-metrics-exporter-httpserver" % "1.8.0" % Test
   val redis4cats = "dev.profunktor" %% "redis4cats-effects" % "2.0.6"
   val zio = "dev.zio" %% "zio" % "2.1.26" % Test
   val zioInteropCats = "dev.zio" %% "zio-interop-cats" % "23.1.0.13" % Test

@@ -15,7 +15,10 @@ lazy val commonSettings = Seq(
 lazy val root = (project in file("."))
   .settings(commonSettings)
   .settings(name := "kots-cache", publish / skip := true)
-  .aggregate(core, mem, jcache, redis, interop, bench, caffeine, hazelcast, couchbase, infinispan)
+  .aggregate(
+    core, mem, jcache, redis, interop, bench, caffeine, hazelcast, couchbase, infinispan,
+    prometheus,
+  )
 
 lazy val core = project
   .in(file("modules/core"))
@@ -81,6 +84,13 @@ lazy val infinispan = project
   .settings(libraryDependencies += Dependencies.infinispanHotrod)
   .settings(Test / fork := true)
   .dependsOn(core % "compile->compile;test->test")
+
+lazy val prometheus = project
+  .in(file("modules/prometheus"))
+  .settings(commonSettings)
+  .settings(name := "kots-cache-prometheus")
+  .settings(libraryDependencies ++= Seq(prometheusCore, prometheusHttpServer))
+  .dependsOn(core % "compile->compile;test->test", mem % "test->compile")
 
 lazy val bench = project
   .in(file("modules/bench"))

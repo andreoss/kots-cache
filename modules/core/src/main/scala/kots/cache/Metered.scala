@@ -13,13 +13,10 @@ object Metered {
   ): Cache[F, K, V] =
     new Cache[F, K, V] {
       def get(key: K): F[Option[V]] =
-        for {
-          start <- Clock[F].monotonic
-          result <- underlying.get(key)
-          end <- Clock[F].monotonic
-          _ <- if (result.isDefined) metrics.hit else metrics.miss
-          _ <- metrics.getLatency(end - start)
-        } yield result
+        Clock[F].timed(underlying.get(key)).flatMap { case (elapsed, result) =>
+          result.fold(metrics.miss)(_ => metrics.hit) *>
+            metrics.getLatency(elapsed).as(result)
+        }
       def put(key: K, value: V): F[Unit] = underlying.put(key, value)
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] = underlying.modify(key)(f)
       def remove(key: K): F[Unit] = underlying.remove(key)
@@ -33,17 +30,12 @@ object Metered {
   ): LoadingCache[F, K, V] =
     new LoadingCache[F, K, V] {
       private val metered = cache(underlying, metrics)
-      def getOrLoad(key: K)(load: F[V]): F[V] = {
-        val timed = for {
-          _ <- metrics.load
-          start <- Clock[F].monotonic
-          outcome <- load.attempt
-          end <- Clock[F].monotonic
-          _ <- metrics.loadLatency(end - start, outcome.isRight)
-          value <- outcome.liftTo[F]
-        } yield value
-        underlying.getOrLoad(key)(timed)
-      }
+      def getOrLoad(key: K)(load: F[V]): F[V] =
+        underlying.getOrLoad(key) {
+          metrics.load *> Clock[F].timed(load.attempt).flatMap { case (elapsed, outcome) =>
+            metrics.loadLatency(elapsed, outcome.isRight) *> outcome.liftTo[F]
+          }
+        }
       def get(key: K): F[Option[V]] = metered.get(key)
       def put(key: K, value: V): F[Unit] = metered.put(key, value)
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] = metered.modify(key)(f)

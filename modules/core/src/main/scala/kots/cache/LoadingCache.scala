@@ -4,6 +4,8 @@ import cats.effect.kernel.{Concurrent, Deferred, Ref}
 import cats.effect.syntax.all._
 import cats.syntax.all._
 
+import java.util.concurrent.CancellationException
+
 /** Cache that loads absent values, collapsing concurrent loads per key. */
 trait LoadingCache[F[_], K, V] extends Cache[F, K, V] {
   def getOrLoad(key: K)(load: F[V]): F[V]
@@ -33,13 +35,13 @@ object LoadingCache {
 
         private def lead(key: K, load: F[V], d: Deferred[F, Either[Throwable, V]]): F[V] =
           load.attempt
-            .flatTap(r => r.traverse_(v => underlying.put(key, v)))
+            .flatTap(_.traverse_(underlying.put(key, _)))
             .flatTap(_ => flights.update(_ - key))
             .flatTap(d.complete)
             .rethrow
             .onCancel(
               flights.update(_ - key) *>
-                d.complete(Left(new java.util.concurrent.CancellationException("load canceled"))).void,
+                d.complete(Left(new CancellationException("load canceled"))).void,
             )
 
         def get(key: K): F[Option[V]] = underlying.get(key)

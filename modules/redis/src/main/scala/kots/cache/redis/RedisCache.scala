@@ -60,10 +60,7 @@ object RedisCache {
         }
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
-        attemptModify(key)(f).flatMap {
-          case Some(a) => F.pure(a)
-          case None    => modify(key)(f)
-        }
+        attemptModify(key)(f).untilDefinedM
 
       private def attemptModify[A](key: K)(f: Option[V] => (Option[V], A)): F[Option[A]] =
         for {

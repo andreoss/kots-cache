@@ -42,10 +42,7 @@ object InfinispanCache {
         }
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
-        attempt(key)(f).flatMap {
-          case Some(a) => F.pure(a)
-          case None    => modify(key)(f)
-        }
+        attempt(key)(f).untilDefinedM
 
       private def attempt[A](key: K)(f: Option[V] => (Option[V], A)): F[Option[A]] =
         F.blocking(Option(remote.getWithMetadata(id(key)))).flatMap { meta =>
@@ -83,7 +80,7 @@ object InfinispanCache {
           }
         }
 
-      def remove(key: K): F[Unit] = F.blocking { remote.remove(id(key)); () }
+      def remove(key: K): F[Unit] = F.blocking(remote.remove(id(key))).void
 
       def clear: F[Unit] = F.blocking(remote.clear())
     }

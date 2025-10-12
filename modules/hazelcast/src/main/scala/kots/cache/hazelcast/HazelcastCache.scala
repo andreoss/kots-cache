@@ -15,10 +15,7 @@ object HazelcastCache {
       def put(key: K, value: V): F[Unit] = F.delay(map.set(key, value))
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
-        attempt(key)(f).flatMap {
-          case Some(a) => F.pure(a)
-          case None    => modify(key)(f)
-        }
+        attempt(key)(f).untilDefinedM
 
       private def attempt[A](key: K)(f: Option[V] => (Option[V], A)): F[Option[A]] =
         F.delay {

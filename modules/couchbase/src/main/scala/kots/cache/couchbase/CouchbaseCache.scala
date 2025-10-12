@@ -61,16 +61,11 @@ object CouchbaseCache {
       def put(key: K, value: V): F[Unit] =
         F.blocking {
           val base = UpsertOptions.upsertOptions().transcoder(raw)
-          val options = ttl.fold(base)(base.expiry)
-          collection.upsert(id(key), valueCodec.encode(value), options)
-          ()
-        }
+          collection.upsert(id(key), valueCodec.encode(value), ttl.fold(base)(base.expiry))
+        }.void
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
-        attempt(key)(f).flatMap {
-          case Some(a) => F.pure(a)
-          case None    => modify(key)(f)
-        }
+        attempt(key)(f).untilDefinedM
 
       private def attempt[A](key: K)(f: Option[V] => (Option[V], A)): F[Option[A]] =
         F.blocking {
@@ -107,21 +102,20 @@ object CouchbaseCache {
         }
 
       def remove(key: K): F[Unit] =
-        F.blocking {
-          try { collection.remove(id(key)); () }
-          catch { case _: DocumentNotFoundException => () }
-        }
+        F.blocking(
+          try collection.remove(id(key))
+          catch { case _: DocumentNotFoundException => () },
+        ).void
 
       def clear: F[Unit] =
-        F.blocking {
+        F.blocking(
           cluster.query(
             s"DELETE FROM `$bucketName` WHERE META().id LIKE $$pattern",
             QueryOptions
               .queryOptions()
               .parameters(JsonObject.create().put("pattern", s"$namespace:%"))
               .scanConsistency(QueryScanConsistency.REQUEST_PLUS),
-          )
-          ()
-        }
+          ),
+        ).void
     }
 }

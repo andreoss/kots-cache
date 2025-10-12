@@ -14,11 +14,9 @@ object Bench {
   }
 
   private def timed(label: String, ops: Int)(op: Int => IO[Unit]): IO[Report] =
-    for {
-      start <- Clock[IO].monotonic
-      _ <- (1 to ops).toList.traverse_(op)
-      end <- Clock[IO].monotonic
-    } yield Report(label, ops, end - start)
+    Clock[IO].timed((1 to ops).toList.traverse_(op)).map { case (elapsed, _) =>
+      Report(label, ops, elapsed)
+    }
 
   /** Runs the comparison and prints one line per contender. */
   def report(ops: Int): IO[Unit] =

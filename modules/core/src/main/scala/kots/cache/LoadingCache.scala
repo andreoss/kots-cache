@@ -1,5 +1,6 @@
 package kots.cache
 
+import cats.data.OptionT
 import cats.effect.kernel.{Concurrent, Deferred, Ref}
 import cats.effect.syntax.all._
 import cats.syntax.all._
@@ -13,30 +14,30 @@ trait LoadingCache[F[_], K, V] extends Cache[F, K, V] {
 
 object LoadingCache {
 
+  private type Flight[F[_], V] = Deferred[F, Either[Throwable, V]]
+
   /** Wraps a cache so concurrent loads of one key run the loader once. */
   def singleFlight[F[_], K, V](
     underlying: Cache[F, K, V],
   )(implicit F: Concurrent[F]): F[LoadingCache[F, K, V]] =
-    Ref.of[F, Map[K, Deferred[F, Either[Throwable, V]]]](Map.empty).map { flights =>
+    F.ref(Map.empty[K, Flight[F, V]]).map { flights =>
       new LoadingCache[F, K, V] {
         def getOrLoad(key: K)(load: F[V]): F[V] =
-          underlying.get(key).flatMap {
-            case Some(v) => F.pure(v)
-            case None =>
-              Deferred[F, Either[Throwable, V]].flatMap { d =>
-                flights.modify { m =>
-                  m.get(key) match {
-                    case Some(inFlight) => (m, inFlight.get.rethrow)
-                    case None           => (m.updated(key, d), lead(key, load, d))
-                  }
-                }.flatten
-              }
+          OptionT(underlying.get(key)).getOrElseF {
+            F.deferred[Either[Throwable, V]].flatMap { d =>
+              flights.modify { m =>
+                m.get(key) match {
+                  case Some(inFlight) => (m, inFlight.get.rethrow)
+                  case None           => (m.updated(key, d), lead(key, load, d))
+                }
+              }.flatten
+            }
           }
 
-        private def lead(key: K, load: F[V], d: Deferred[F, Either[Throwable, V]]): F[V] =
+        private def lead(key: K, load: F[V], d: Flight[F, V]): F[V] =
           load.attempt
             .flatTap(_.traverse_(underlying.put(key, _)))
-            .flatTap(_ => flights.update(_ - key))
+            .productL(flights.update(_ - key))
             .flatTap(d.complete)
             .rethrow
             .onCancel(

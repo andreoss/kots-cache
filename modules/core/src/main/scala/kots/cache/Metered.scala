@@ -1,13 +1,13 @@
 package kots.cache
 
-import cats.MonadThrow
+import cats.{Monad, MonadThrow}
 import cats.effect.kernel.Clock
 import cats.syntax.all._
 
 object Metered {
 
   /** Wraps a cache so gets report hits, misses and latency. */
-  def cache[F[_]: MonadThrow: Clock, K, V](
+  def cache[F[_]: Monad: Clock, K, V](
     underlying: Cache[F, K, V],
     metrics: CacheMetrics[F],
   ): Cache[F, K, V] =

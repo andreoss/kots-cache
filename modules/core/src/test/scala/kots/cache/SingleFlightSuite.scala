@@ -52,6 +52,24 @@ final class SingleFlightSuite extends CatsEffectSuite {
       .assertEquals(Some(5))
   }
 
+  test("a canceled leader releases followers and frees the flight") {
+    loading.flatMap { case (c, _) =>
+      for {
+        gate <- IO.deferred[Unit]
+        leader <- c.getOrLoad("k")(gate.complete(()) *> IO.never[Int]).start
+        _ <- gate.get
+        follower <- c.getOrLoad("k")(IO.pure(7)).attempt.start
+        _ <- IO.sleep(20.millis)
+        _ <- leader.cancel
+        followed <- follower.joinWithNever
+        retried <- c.getOrLoad("k")(IO.pure(9))
+      } yield {
+        assert(followed.isLeft)
+        assertEquals(retried, 9)
+      }
+    }
+  }
+
   test("the loading cache delegates the base algebra") {
     loading.flatMap { case (c, _) =>
       c.put("a", 1) *> c.modify("a")(o => (o.map(_ + 1), ())) *> c.get("a").flatMap { v =>

@@ -29,17 +29,28 @@ object InfinispanCache {
       private def parse(text: String): F[V] =
         valueCodec.decode(text).leftMap(InfinispanCodecException.apply).liftTo[F]
 
+      private def store(k: String, text: String): Unit = {
+        ttlMs.fold[AnyRef](remote.put(k, text))(ms => remote.put(k, text, ms, TimeUnit.MILLISECONDS))
+        ()
+      }
+
+      private def replaceVersioned(k: String, text: String, version: Long): Boolean =
+        ttlMs.fold(remote.replaceWithVersion(k, text, version)) { ms =>
+          remote.replaceWithVersion(k, text, version, ms, TimeUnit.MILLISECONDS, -1, TimeUnit.MILLISECONDS)
+        }
+
+      private def insertIfAbsent(k: String, text: String): Boolean = {
+        val returning = remote.withFlags(Flag.FORCE_RETURN_VALUE)
+        ttlMs.fold(returning.putIfAbsent(k, text))(ms =>
+          returning.putIfAbsent(k, text, ms, TimeUnit.MILLISECONDS),
+        ) == null
+      }
+
       def get(key: K): F[Option[V]] =
         F.blocking(Option(remote.get(id(key)))).flatMap(_.traverse(parse))
 
       def put(key: K, value: V): F[Unit] =
-        F.blocking {
-          ttlMs match {
-            case Some(ms) => remote.put(id(key), valueCodec.encode(value), ms, TimeUnit.MILLISECONDS)
-            case None     => remote.put(id(key), valueCodec.encode(value))
-          }
-          ()
-        }
+        F.blocking(store(id(key), valueCodec.encode(value))).void
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
         attempt(key)(f).untilDefinedM
@@ -50,30 +61,10 @@ object InfinispanCache {
             val (next, a) = f(current)
             F.blocking {
               val won = (meta, next) match {
-                case (Some(m), Some(n)) =>
-                  ttlMs match {
-                    case Some(ms) =>
-                      remote.replaceWithVersion(
-                        id(key),
-                        valueCodec.encode(n),
-                        m.getVersion,
-                        ms,
-                        TimeUnit.MILLISECONDS,
-                        -1,
-                        TimeUnit.MILLISECONDS,
-                      )
-                    case None =>
-                      remote.replaceWithVersion(id(key), valueCodec.encode(n), m.getVersion)
-                  }
-                case (Some(m), None) => remote.removeWithVersion(id(key), m.getVersion)
-                case (None, Some(n)) =>
-                  val returning = remote.withFlags(Flag.FORCE_RETURN_VALUE)
-                  ttlMs match {
-                    case Some(ms) =>
-                      returning.putIfAbsent(id(key), valueCodec.encode(n), ms, TimeUnit.MILLISECONDS) == null
-                    case None => returning.putIfAbsent(id(key), valueCodec.encode(n)) == null
-                  }
-                case (None, None) => true
+                case (Some(m), Some(n)) => replaceVersioned(id(key), valueCodec.encode(n), m.getVersion)
+                case (Some(m), None)    => remote.removeWithVersion(id(key), m.getVersion)
+                case (None, Some(n))    => insertIfAbsent(id(key), valueCodec.encode(n))
+                case (None, None)       => true
               }
               Option.when(won)(a)
             }

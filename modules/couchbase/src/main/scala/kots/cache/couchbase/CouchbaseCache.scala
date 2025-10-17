@@ -47,6 +47,9 @@ object CouchbaseCache {
       private def parse(text: String): F[V] =
         valueCodec.decode(text).leftMap(CouchbaseCodecException.apply).liftTo[F]
 
+      private def expiring[O](base: O)(withExpiry: (O, java.time.Duration) => O): O =
+        ttl.fold(base)(withExpiry(base, _))
+
       def get(key: K): F[Option[V]] =
         F.blocking {
           try
@@ -60,46 +63,46 @@ object CouchbaseCache {
 
       def put(key: K, value: V): F[Unit] =
         F.blocking {
-          val base = UpsertOptions.upsertOptions().transcoder(raw)
-          collection.upsert(id(key), valueCodec.encode(value), ttl.fold(base)(base.expiry))
+          val options = expiring(UpsertOptions.upsertOptions().transcoder(raw))(_.expiry(_))
+          collection.upsert(id(key), valueCodec.encode(value), options)
         }.void
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
         attempt(key)(f).untilDefinedM
 
       private def attempt[A](key: K)(f: Option[V] => (Option[V], A)): F[Option[A]] =
-        F.blocking {
-          try {
-            val result = collection.get(id(key), GetOptions.getOptions().transcoder(raw))
-            (Some(result.contentAs(classOf[String])), result.cas())
-          } catch { case _: DocumentNotFoundException => (Option.empty[String], 0L) }
-        }.flatMap { case (currentText, cas) =>
-          currentText.traverse(parse).flatMap { current =>
-            val (next, a) = f(current)
-            F.blocking {
-              try {
-                (current, next) match {
-                  case (Some(_), Some(n)) =>
-                    val base = ReplaceOptions.replaceOptions().transcoder(raw).cas(cas)
-                    collection.replace(id(key), valueCodec.encode(n), ttl.fold(base)(base.expiry))
-                    Some(a)
-                  case (Some(_), None) =>
-                    collection.remove(id(key), RemoveOptions.removeOptions().cas(cas))
-                    Some(a)
-                  case (None, Some(n)) =>
-                    val base = InsertOptions.insertOptions().transcoder(raw)
-                    collection.insert(id(key), valueCodec.encode(n), ttl.fold(base)(base.expiry))
-                    Some(a)
-                  case (None, None) => Some(a)
-                }
-              } catch {
-                case _: CasMismatchException      => None
-                case _: DocumentNotFoundException => None
-                case _: DocumentExistsException   => None
+        for {
+          fetched <- F.blocking {
+            try {
+              val result = collection.get(id(key), GetOptions.getOptions().transcoder(raw))
+              (Some(result.contentAs(classOf[String])), result.cas())
+            } catch { case _: DocumentNotFoundException => (Option.empty[String], 0L) }
+          }
+          (currentText, cas) = fetched
+          current <- currentText.traverse(parse)
+          (next, a) = f(current)
+          won <- F.blocking {
+            try {
+              (current, next) match {
+                case (Some(_), Some(n)) =>
+                  val options =
+                    expiring(ReplaceOptions.replaceOptions().transcoder(raw).cas(cas))(_.expiry(_))
+                  collection.replace(id(key), valueCodec.encode(n), options)
+                case (Some(_), None) =>
+                  collection.remove(id(key), RemoveOptions.removeOptions().cas(cas))
+                case (None, Some(n)) =>
+                  val options = expiring(InsertOptions.insertOptions().transcoder(raw))(_.expiry(_))
+                  collection.insert(id(key), valueCodec.encode(n), options)
+                case (None, None) => ()
               }
+              true
+            } catch {
+              case _: CasMismatchException      => false
+              case _: DocumentNotFoundException => false
+              case _: DocumentExistsException   => false
             }
           }
-        }
+        } yield Option.when(won)(a)
 
       def remove(key: K): F[Unit] =
         F.blocking(

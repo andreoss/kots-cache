@@ -10,34 +10,7 @@ import scala.concurrent.duration._
 
 final class MeteredSuite extends CatsEffectSuite {
 
-  private final case class Probe(
-    hits: Ref[IO, Int],
-    misses: Ref[IO, Int],
-    loads: Ref[IO, Int],
-    getLatencies: Ref[IO, List[FiniteDuration]],
-    loadLatencies: Ref[IO, List[(FiniteDuration, Boolean)]],
-    lifetimes: Ref[IO, List[FiniteDuration]],
-  ) extends CacheMetrics[IO] {
-    def hit: IO[Unit] = hits.update(_ + 1)
-    def miss: IO[Unit] = misses.update(_ + 1)
-    def load: IO[Unit] = loads.update(_ + 1)
-    def eviction: IO[Unit] = IO.unit
-    def getLatency(duration: FiniteDuration): IO[Unit] =
-      getLatencies.update(duration :: _)
-    def loadLatency(duration: FiniteDuration, success: Boolean): IO[Unit] =
-      loadLatencies.update((duration, success) :: _)
-    def entryLifetime(age: FiniteDuration): IO[Unit] = lifetimes.update(age :: _)
-  }
-
-  private def probe: IO[Probe] =
-    (
-      Ref.of[IO, Int](0),
-      Ref.of[IO, Int](0),
-      Ref.of[IO, Int](0),
-      Ref.of[IO, List[FiniteDuration]](Nil),
-      Ref.of[IO, List[(FiniteDuration, Boolean)]](Nil),
-      Ref.of[IO, List[FiniteDuration]](Nil),
-    ).mapN(Probe.apply)
+  private def probe: IO[MetricsProbe] = MetricsProbe.make
 
   private def stub: IO[Cache[IO, String, Int]] =
     Ref.of[IO, Map[String, Int]](Map.empty).map { ref =>

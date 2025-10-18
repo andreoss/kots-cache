@@ -1,12 +1,9 @@
 package kots.cache.mem
 
 import cats.effect.IO
-import cats.effect.kernel.Ref
 import cats.syntax.all._
-import kots.cache.{Cache, CacheContract, CacheMetrics}
+import kots.cache.{Cache, CacheContract, MetricsProbe}
 import munit.CatsEffectSuite
-
-import scala.concurrent.duration.FiniteDuration
 
 final class MemBoundedContractSuite extends CacheContract {
   def cache: IO[Cache[IO, String, Int]] = MemCache.bounded[IO, String, Int](1000)
@@ -43,18 +40,9 @@ final class MemBoundedSuite extends CatsEffectSuite {
   }
 
   test("each eviction is reported to the metrics port") {
-    Ref.of[IO, Int](0).flatMap { evictions =>
-      val metrics = new CacheMetrics[IO] {
-        def hit: IO[Unit] = IO.unit
-        def miss: IO[Unit] = IO.unit
-        def load: IO[Unit] = IO.unit
-        def eviction: IO[Unit] = evictions.update(_ + 1)
-        def getLatency(duration: FiniteDuration): IO[Unit] = IO.unit
-        def loadLatency(duration: FiniteDuration, success: Boolean): IO[Unit] = IO.unit
-        def entryLifetime(age: FiniteDuration): IO[Unit] = IO.unit
-      }
-      MemCache.bounded[IO, String, Int](2, metrics).flatMap { c =>
-        c.put("a", 1) *> c.put("b", 2) *> c.put("c", 3) *> c.put("a", 4) *> evictions.get
+    MetricsProbe.make.flatMap { probe =>
+      MemCache.bounded[IO, String, Int](2, probe).flatMap { c =>
+        c.put("a", 1) *> c.put("b", 2) *> c.put("c", 3) *> c.put("a", 4) *> probe.evictions.get
       }
     }.assertEquals(2)
   }

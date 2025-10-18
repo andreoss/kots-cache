@@ -1,5 +1,7 @@
 package kots.cache
 
+import cats.Invariant
+
 /** Codec between a typed value and its text form; decoding is a parse. */
 trait Codec[A] {
   def encode(value: A): String
@@ -10,6 +12,15 @@ trait Codec[A] {
 final case class CodecError(description: String)
 
 object Codec {
+
+  implicit val invariant: Invariant[Codec] =
+    new Invariant[Codec] {
+      def imap[A, B](fa: Codec[A])(f: A => B)(g: B => A): Codec[B] =
+        new Codec[B] {
+          def encode(value: B): String = fa.encode(g(value))
+          def decode(text: String): Either[CodecError, B] = fa.decode(text).map(f)
+        }
+    }
 
   val string: Codec[String] =
     new Codec[String] {

@@ -2,11 +2,17 @@ package kots.cache.hazelcast
 
 import cats.effect.IO
 import com.hazelcast.client.HazelcastClient
+import com.hazelcast.client.config.ClientConfig
 import kots.cache.{Cache, CacheContract}
 
 final class HazelcastCacheSuite extends CacheContract {
 
-  private lazy val client = HazelcastClient.newHazelcastClient()
+  private lazy val client = {
+    val config = new ClientConfig()
+    config.getConnectionStrategyConfig.getConnectionRetryConfig
+      .setClusterConnectTimeoutMillis(30000L)
+    HazelcastClient.newHazelcastClient(config)
+  }
 
   override def afterAll(): Unit = {
     client.shutdown()

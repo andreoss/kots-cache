@@ -10,15 +10,15 @@ object HazelcastCache {
   /** Wraps a Hazelcast map; modify retries over the client CAS primitives. */
   def of[F[_], K, V](map: IMap[K, V])(implicit F: Sync[F]): Cache[F, K, V] =
     new Cache[F, K, V] {
-      def get(key: K): F[Option[V]] = F.delay(Option(map.get(key)))
+      def get(key: K): F[Option[V]] = F.blocking(Option(map.get(key)))
 
-      def put(key: K, value: V): F[Unit] = F.delay(map.set(key, value))
+      def put(key: K, value: V): F[Unit] = F.blocking(map.set(key, value))
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
         attempt(key)(f).untilDefinedM
 
       private def attempt[A](key: K)(f: Option[V] => (Option[V], A)): F[Option[A]] =
-        F.delay {
+        F.blocking {
           val current = Option(map.get(key))
           val (next, a) = f(current)
           val won = (current, next) match {
@@ -30,8 +30,8 @@ object HazelcastCache {
           Option.when(won)(a)
         }
 
-      def remove(key: K): F[Unit] = F.delay(map.delete(key))
+      def remove(key: K): F[Unit] = F.blocking(map.delete(key))
 
-      def clear: F[Unit] = F.delay(map.clear())
+      def clear: F[Unit] = F.blocking(map.clear())
     }
 }

@@ -114,6 +114,34 @@ final class MeteredSuite extends CatsEffectSuite {
     }.assertEquals((Some(2), None))
   }
 
+
+  test("a getOrLoad that finds the value counts a hit") {
+    (stub, probe).flatMapN { (c0, p) =>
+      LoadingCache.singleFlight(c0).flatMap { lc =>
+        val c = Metered.loading(lc, p)
+        c.put("k", 5) *> c.getOrLoad("k")(IO.pure(1)) *>
+          (p.hits.get, p.misses.get).tupled
+      }
+    }.assertEquals((1, 0))
+  }
+
+  test("a getOrLoad that runs the loader counts a miss") {
+    (stub, probe).flatMapN { (c0, p) =>
+      LoadingCache.singleFlight(c0).flatMap { lc =>
+        val c = Metered.loading(lc, p)
+        c.getOrLoad("k")(IO.pure(1)) *> (p.hits.get, p.misses.get).tupled
+      }
+    }.assertEquals((0, 1))
+  }
+
+  test("the read behind getOrLoad reports its latency") {
+    (stub, probe).flatMapN { (c0, p) =>
+      LoadingCache.singleFlight(c0).flatMap { lc =>
+        val c = Metered.loading(lc, p)
+        c.put("k", 5) *> c.getOrLoad("k")(IO.pure(1)) *> p.getLatencies.get.map(_.size)
+      }
+    }.assertEquals(1)
+  }
   test("every no-op metric runs") {
     val m = CacheMetrics.noop[IO]
     (m.hit *> m.miss *> m.load *> m.eviction).assertEquals(())

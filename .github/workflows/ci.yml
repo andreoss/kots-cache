@@ -25,6 +25,7 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: sbt
+      - uses: sbt/setup-sbt@v1
       - name: Unit and embedded-provider tests (Scala 2.13 and 3)
         run: sbt -batch "+core/test" "+mem/test" "+jcache/test" "+caffeine/test" "+interop/test" "+bench/test"
       - name: Coverage report (Scala 2.13)
@@ -47,6 +48,7 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: sbt
+      - uses: sbt/setup-sbt@v1
       - name: Start backing services
         run: docker compose up -d --wait
       - name: Wait for Hazelcast

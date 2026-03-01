@@ -50,12 +50,12 @@ Unit and embedded-provider tiers need no services.
 
 ## e2e tier
 
-Backend services come from the compose stack:
+The remote adapters run against live services from the compose stack:
 
     docker compose up -d --wait
     ./scripts/couchbase-init.sh
     sbt -batch +redis/test +hazelcast/test +infinispan/test +couchbase/test +prometheus/test
     docker compose down
 
-`prometheus/test` exposes a workload on `127.0.0.1:19095` and asserts the
-composed Prometheus scrapes it.
+The metrics suite serves a live cache workload on `127.0.0.1:19095` and
+asserts the composed Prometheus scrapes its series back.

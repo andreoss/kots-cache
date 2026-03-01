@@ -54,13 +54,8 @@ Backend services come from the compose stack:
 
     docker compose up -d --wait
     ./scripts/couchbase-init.sh
+    sbt -batch +redis/test +hazelcast/test +infinispan/test +couchbase/test +prometheus/test
+    docker compose down
 
-    sbt -batch +redis/test +hazelcast/test +infinispan/test +couchbase/test
-
-The metrics e2e suite in `modules/prometheus` exposes a workload on
-`127.0.0.1:19095` and asserts the composed Prometheus (host network,
-`scripts/prometheus.yml`) scrapes it:
-
-    sbt -batch +prometheus/test
-
-Tear down with `docker compose down`.
+`prometheus/test` exposes a workload on `127.0.0.1:19095` and asserts the
+composed Prometheus scrapes it.

@@ -3,8 +3,9 @@ package kots.cache.redis
 import cats.MonadThrow
 import cats.syntax.all._
 import dev.profunktor.redis4cats.RedisCommands
-import dev.profunktor.redis4cats.effects.ScriptOutputType
-import kots.cache.{Cache, Codec, CodecError}
+import dev.profunktor.redis4cats.data.KeyScanCursor
+import dev.profunktor.redis4cats.effects.{KeyScanArgs, ScriptOutputType}
+import kots.cache.{Cache, Codec, CodecError, Retry}
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -13,6 +14,8 @@ final case class CodecException(error: CodecError)
   extends RuntimeException(error.description)
 
 object RedisCache {
+
+  private final val ScanPage = 100L
 
   private val casScript =
     """local cur = redis.call('GET', KEYS[1])
@@ -43,8 +46,11 @@ object RedisCache {
     valueCodec: Codec[V],
     namespace: String,
     timeToLive: Option[FiniteDuration],
+    retry: Retry = Retry.default,
   )(implicit F: MonadThrow[F]): Cache[F, K, V] =
     new Cache[F, K, V] {
+      private val scanArgs = KeyScanArgs(s"$namespace:*", ScanPage)
+
       private def raw(key: K): String = s"$namespace:${keyCodec.encode(key)}"
 
       private def parse(text: String): F[V] =
@@ -60,7 +66,7 @@ object RedisCache {
         }
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
-        attemptModify(key)(f).untilDefinedM
+        retry.cas(attemptModify(key)(f))
 
       private def attemptModify[A](key: K)(f: Option[V] => (Option[V], A)): F[Option[A]] =
         for {

@@ -2,7 +2,7 @@ package kots.cache.infinispan
 
 import cats.effect.kernel.Sync
 import cats.syntax.all._
-import kots.cache.{Cache, Codec, CodecError}
+import kots.cache.{Cache, Codec, CodecError, Retry}
 import org.infinispan.client.hotrod.{Flag, RemoteCache}
 
 import java.util.concurrent.TimeUnit
@@ -20,6 +20,7 @@ object InfinispanCache {
     keyCodec: Codec[K],
     valueCodec: Codec[V],
     timeToLive: Option[FiniteDuration],
+    retry: Retry = Retry.default,
   )(implicit F: Sync[F]): Cache[F, K, V] =
     new Cache[F, K, V] {
       private val ttlMs = timeToLive.map(_.toMillis)
@@ -53,7 +54,7 @@ object InfinispanCache {
         F.blocking(store(id(key), valueCodec.encode(value))).void
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
-        attempt(key)(f).untilDefinedM
+        retry.cas(attempt(key)(f))
 
       private def attempt[A](key: K)(f: Option[V] => (Option[V], A)): F[Option[A]] =
         F.blocking(Option(remote.getWithMetadata(id(key)))).flatMap { meta =>

@@ -18,7 +18,7 @@ import com.couchbase.client.java.kv.{
   UpsertOptions,
 }
 import com.couchbase.client.java.query.{QueryOptions, QueryScanConsistency}
-import kots.cache.{Cache, Codec, CodecError}
+import kots.cache.{Cache, Codec, CodecError, Retry}
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -37,6 +37,7 @@ object CouchbaseCache {
     valueCodec: Codec[V],
     namespace: String,
     timeToLive: Option[FiniteDuration],
+    retry: Retry = Retry.default,
   )(implicit F: Sync[F]): Cache[F, K, V] =
     new Cache[F, K, V] {
       private val raw = RawStringTranscoder.INSTANCE
@@ -68,7 +69,7 @@ object CouchbaseCache {
         }.void
 
       def modify[A](key: K)(f: Option[V] => (Option[V], A)): F[A] =
-        attempt(key)(f).untilDefinedM
+        retry.cas(attempt(key)(f))
 
       private def attempt[A](key: K)(f: Option[V] => (Option[V], A)): F[Option[A]] =
         for {

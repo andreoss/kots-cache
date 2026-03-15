@@ -87,9 +87,15 @@ object RedisCache {
       def remove(key: K): F[Unit] = commands.del(raw(key)).void
 
       def clear: F[Unit] =
-        commands.keys(s"$namespace:*").flatMap {
-          case Nil          => F.unit
-          case head :: tail => commands.del(head, tail: _*).void
+        drop(commands.scan(scanArgs))
+
+      private def drop(page: F[KeyScanCursor[String]]): F[Unit] =
+        page.flatMap { cursor =>
+          val dropped = cursor.keys match {
+            case head :: tail => commands.del(head, tail: _*).void
+            case Nil          => F.unit
+          }
+          dropped *> (if (cursor.isFinished) F.unit else drop(commands.scan(cursor, scanArgs)))
         }
     }
 }
